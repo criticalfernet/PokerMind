@@ -94,8 +94,8 @@ void printCards(string info, vector<Card> cards, bool folded, double probability
 
 void printTable(const string& stage, vector<Hand>& hands){
   clearScreen();
-  auto probabilities = monteCarlo(hands, 10000);
-  double predict = monteCarloPartial(hands.size(), hands[0], 10000);
+  auto probabilities = monteCarlo(hands, 1'000'000);
+  double predict = monteCarloPartial(hands.size(), hands[0], 1'000'000);
   cout << "\n========== " << stage << " ==========\n";
 
   auto community = hands[0].getCommCards();
@@ -183,7 +183,7 @@ int main() {
 
   vector<HandRank> ranks;
   for(int i = 0; i < numPlayers; i++) {
-    auto [rank, cards] = evaluateHand(hands[i]);
+    const HandRank& rank = evaluateHand(hands[i]);
     ranks.push_back(rank);
   }
 

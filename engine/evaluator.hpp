@@ -28,22 +28,11 @@ struct HandRank {
   HandCategory category = HandCategory::None;
   std::array<uint8_t, 5> kickers{};
 
-  bool operator==(const HandRank& other) const = default;
-
-  bool operator<(const HandRank& other) const {
-    if (category != other.category) {
-        return category < other.category;
-    }
-    return kickers < other.kickers;
-  }
-
-  bool operator>(const HandRank& other) const {
-    return other < *this;
-  }
+  auto operator<=>(const HandRank& other) const = default;
 };
 
 
-HandRank make_rank(HandCategory category, std::initializer_list<uint8_t> values) {
+inline HandRank make_rank(HandCategory category, std::initializer_list<uint8_t> values) {
     HandRank result{};
     result.category = category;
 
@@ -59,178 +48,109 @@ HandRank make_rank(HandCategory category, std::initializer_list<uint8_t> values)
 using RankCounts = std::array<int, 15>;
 
 
-uint8_t getStraightHigh(const RankCounts& counts) {
-    for (int high = 14; high >= 6; high--) {
-        bool straight = true;
-        for (int rank = high; rank > high - 5; rank--) {
-            if (counts[rank] == 0) {
-                straight = false;
-                break;
-            }
-        }
-        if (straight) return static_cast<uint8_t>(high);
-    }
-
-    if (counts[14] && counts[2] && counts[3] && counts[4] &&counts[5]) {
-        return 5; // wheel: A-2-3-4-5
-    }
-
-    return 0;
+inline uint8_t getStraightHigh(uint16_t m) { // bit r set if rank r present
+  if (m & (1u << 14)) m |= 1u << 1; // (wheel)
+  for (int h = 14; h >= 5; --h) {
+    const uint16_t need = 0x1Fu << (h - 4);
+    if ((m & need) == need) return static_cast<uint8_t>(h);
+  }
+  return 0;
 }
 
 
-bool checkFlush(const std::array<Card, 5>& cards) {
-    for (size_t i = 1; i < 5; ++i) {
-        if (cards[i].suit != cards[0].suit) {
-            return false;
-        }
-    }
-    return true;
-}
-
-HandCategory getBestGroup(std::vector<std::pair<int, int>>& groups) {
-  if (groups[0].first == 4) return HandCategory::FourOfAKind;
-  if (groups[0].first == 3 && groups[1].first == 2) return HandCategory::FullHouse;
-  if (groups[0].first == 3) return HandCategory::ThreeOfAKind;
-  if (groups[0].first == 2 && groups[1].first == 2) return HandCategory::TwoPair;
-  if (groups[0].first == 2) return HandCategory::OnePair;
-
-  return HandCategory::None;
+inline int checkFlush(const int (&suitCnt)[4]) {
+  for (int s = 0; s < 4; ++s) if (suitCnt[s] >= 5) return s;
+  return -1;
 }
 
 
-HandRank evaluateFive(const std::array<Card, 5>& cards) {
-    RankCounts countRankFreq{};
-    std::array<uint8_t, 5> ranks{};
+inline HandRank evaluateFive(const std::array<Card, 5>& cards) {
 
-    for (size_t i = 0; i < 5; ++i) { //Count rank frequencies.
-        const auto rank = cards[i].rank;
-        ranks[i] = rank;
-        countRankFreq[rank]++;
+    uint16_t suitMask[4] = {};
+    uint16_t all = 0;
+    int suitCnt[4] = {};
+    uint8_t cnt[15] = {};
+    uint8_t kickers[5] = {};
+
+    for (const Card& c : cards) {
+      const int s = static_cast<int>(c.suit);
+        cnt[c.rank]++;
+        suitCnt[s]++;
+        suitMask[s] |= 1u << c.rank;
+        all |= 1u << c.rank;
     }
 
-    std::sort(ranks.begin(), ranks.end(), std::greater<>());
+    int flush = checkFlush(suitCnt);
 
-    bool flush = checkFlush(cards);
-    const uint8_t straight_high = getStraightHigh(countRankFreq);
-
-    if (flush && straight_high) {
-
-      if(straight_high == 14) {
+    if (flush >= 0) {
+      if(const uint8_t straightH = getStraightHigh(suitMask[flush])) {
         return make_rank(
-          HandCategory::RoyalFlush,
-          {14}
+          straightH == 14 ? HandCategory::RoyalFlush : HandCategory::StraightFlush,
+          {straightH}
         );
       }
-
-      return make_rank(
-        HandCategory::StraightFlush,
-        {straight_high}
-      );
     }
 
-    std::vector<std::pair<int, int>> groups; // {frequency, rank}
-    for (int rank = 14; rank >= 2; rank--) {
-        if (countRankFreq[rank] > 0) {
-            groups.push_back({countRankFreq[rank], rank});
-        }
-    }
-
-    std::sort(groups.begin(),groups.end(),[](const auto& a, const auto& b) {
-        if (a.first != b.first)
-            return a.first > b.first;
-        return a.second > b.second;
+    uint8_t quad = 0, trips=0, pairs[2] = {};
+    int npairs = 0;
+    for (int r = 14; r >= 2; r--) {
+      switch (cnt[r]) {
+        case 4: quad = static_cast<uint8_t>(r); break;
+        case 3: trips = static_cast<uint8_t>(r); break;
+        case 2: pairs[npairs++] = static_cast<uint8_t>(r); break;
+        default: break;
       }
-    );
-
-    HandCategory groupCategory = getBestGroup(groups);
-
- 
-    if (groupCategory == HandCategory::FourOfAKind) {
-        return make_rank(
-            HandCategory::FourOfAKind,
-            {
-                static_cast<uint8_t>(groups[0].second),
-                static_cast<uint8_t>(groups[1].second)
-            }
-        );
     }
 
 
-    if (groupCategory == HandCategory::FullHouse) {
-        return make_rank(
-            HandCategory::FullHouse,
-            {
-                static_cast<uint8_t>(groups[0].second),
-                static_cast<uint8_t>(groups[1].second)
-            }
-        );
+    auto top = [&](uint8_t skip1, uint8_t skip2, int n) {
+      int i = 0;
+      for (int r = 14; r >= 2 && i < n; --r)
+        if (cnt[r] && r != skip1 && r != skip2) kickers[i++] = static_cast<uint8_t>(r);
+    };
+
+    if (quad) {
+      top(quad, 0, 1);
+      return make_rank(HandCategory::FourOfAKind, {quad, kickers[0]});
     }
 
-    if (flush) {
-        return make_rank(
-            HandCategory::Flush,
-            {
-                ranks[0], ranks[1], ranks[2],
-                ranks[3], ranks[4]
-            }
-        );
+
+    if (trips && npairs >= 1) {
+      return make_rank(HandCategory::FullHouse, {trips, pairs[0]});
     }
 
-    if (straight_high) {
-        return make_rank(
-            HandCategory::Straight,
-            {straight_high}
-        );
+    if (flush >= 0) {
+      int n = 0;
+      for (int r = 14; r >= 2 && n < 5; --r)
+        if (suitMask[flush] & (1u << r)) kickers[n++] = static_cast<uint8_t>(r);
+      return make_rank(HandCategory::Flush, {kickers[0], kickers[1], kickers[2], kickers[3], kickers[4]});
     }
 
-    if (groupCategory == HandCategory::ThreeOfAKind) {
-        return make_rank(
-            HandCategory::ThreeOfAKind,
-            {
-                static_cast<uint8_t>(groups[0].second),
-                static_cast<uint8_t>(groups[1].second),
-                static_cast<uint8_t>(groups[2].second)
-            }
-        );
+    if (const uint8_t h = getStraightHigh(all))
+      return make_rank(HandCategory::Straight, {h});
+
+    if (trips) {
+      top(trips, 0, 2);
+      return make_rank(HandCategory::ThreeOfAKind, {trips, kickers[0], kickers[1]});
     }
 
-    if (groupCategory == HandCategory::TwoPair) {
-      return make_rank(
-        HandCategory::TwoPair,
-        {
-            static_cast<uint8_t>(groups[0].second),
-            static_cast<uint8_t>(groups[1].second),
-            static_cast<uint8_t>(groups[2].second)
-        }
-      );
+    if (npairs >= 2) {
+      top(pairs[0], pairs[1], 1);
+      return make_rank(HandCategory::TwoPair, {pairs[0], pairs[1], kickers[0]});
     }
 
-    if (groupCategory == HandCategory::OnePair) {
-      return make_rank(
-        HandCategory::OnePair,
-        {
-            static_cast<uint8_t>(groups[0].second),
-            static_cast<uint8_t>(groups[1].second),
-            static_cast<uint8_t>(groups[2].second),
-            static_cast<uint8_t>(groups[3].second)
-        }
-      );
+    if (npairs == 1) {
+      top(pairs[0], 0, 3);
+      return make_rank(HandCategory::OnePair, {pairs[0], kickers[0], kickers[1], kickers[2]});
     }
 
-    return make_rank(
-        HandCategory::HighCard,
-        {
-            ranks[0], ranks[1], ranks[2],
-            ranks[3], ranks[4]
-        }
-    );
+    top(0, 0, 5);
+    return make_rank(HandCategory::HighCard, {kickers[0], kickers[1], kickers[2], kickers[3], kickers[4]});
 }
 
 
-std::pair<HandRank, std::array<Card, 5>> evaluateTexas(std::array<Card, 7>& available){
+inline HandRank evaluateTexas(const std::array<Card, 7>& available){
   HandRank best{};
-  std::array<Card, 5> winningCards;
 
   for (int a = 0; a < 7; ++a) {
     for (int b = a + 1; b < 7; ++b) {
@@ -249,7 +169,6 @@ std::pair<HandRank, std::array<Card, 5>> evaluateTexas(std::array<Card, 7>& avai
 
             if (best < current) {
               best = current;
-              winningCards = candidate;
             }
           }
         }
@@ -257,13 +176,12 @@ std::pair<HandRank, std::array<Card, 5>> evaluateTexas(std::array<Card, 7>& avai
     }
   }
 
-  return {best, winningCards};
+  return best;
 }
 
 
-std::pair<HandRank, std::array<Card, 5>> evaluateOmaha(const std::vector<Card>& hole, const std::vector<Card>& comm){
+inline HandRank evaluateOmaha(const std::vector<Card>& hole, const std::vector<Card>& comm){
   HandRank best{};
-  std::array<Card, 5> winningCards;
   
   for (int h1 = 0; h1 < 4; ++h1) {
     for (int h2 = h1 + 1; h2 < 4; ++h2) {
@@ -283,7 +201,6 @@ std::pair<HandRank, std::array<Card, 5>> evaluateOmaha(const std::vector<Card>& 
 
             if (best < current) {
                 best = current;
-                winningCards = candidate;
             }
           }
         }
@@ -291,11 +208,11 @@ std::pair<HandRank, std::array<Card, 5>> evaluateOmaha(const std::vector<Card>& 
     }
   }
 
-  return {best, winningCards};
+  return best;
 }
 
 
-std::pair<HandRank, std::array<Card, 5>> evaluateHand(const std::vector<Card>& comm,const std::vector<Card>& hole, Variant var) {
+inline HandRank evaluateHand(const std::vector<Card>& comm,const std::vector<Card>& hole, Variant var) {
   if (comm.size() != 5) throw std::runtime_error("Invalid Community Cards");
 
   if (var == Variant::TexasHoldem) {
@@ -310,11 +227,11 @@ std::pair<HandRank, std::array<Card, 5>> evaluateHand(const std::vector<Card>& c
     return evaluateOmaha(hole, comm);
   }
 
-  return {make_rank(HandCategory::None,{0}), std::array<Card, 5>{}};
+  return make_rank(HandCategory::None,{0});
 }
 
 
-std::pair<HandRank, std::array<Card, 5>> evaluateHand(const Hand& hand) {
+HandRank evaluateHand(const Hand& hand) {
   const auto& hole = hand.getHoleCards();
   const auto& comm = hand.getCommCards();
 

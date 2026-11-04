@@ -54,22 +54,8 @@ public:
   }
 
   void shuffle() {
-    static std::mt19937 rng(std::random_device{}());
+    static thread_local std::mt19937 rng(std::random_device{}());
     std::shuffle(cards.begin(), cards.begin() + size, rng);
     index = 0;
-  }
-
-  void shuffleK(size_t k) { //Fisher-Yates shuffle
-    index = 0;
-    if (k > size) return;
-
-    static std::mt19937 rng(std::random_device{}());
-    for (size_t i = 0; i < k; ++i) {
-      std::uniform_int_distribution<size_t> dist(i, size - 1);
-
-      size_t j = dist(rng);
-      std::swap(cards[i], cards[j]);
-    }
-
   }
 };
