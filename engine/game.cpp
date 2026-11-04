@@ -75,7 +75,7 @@ pair<HandRank,vector<int>> getWinners(vector<HandRank>& ranks, const vector<Hand
   return {best, winners};
 }
 
-void printCards(string info, vector<Card> cards, bool folded, double probability) {
+void printCards(string info, vector<Card> cards, bool folded, double probability, int index, double pred) {
   if (folded) cout << "\033[2m";
   cout << info;
   for(Card c : cards){
@@ -83,6 +83,11 @@ void printCards(string info, vector<Card> cards, bool folded, double probability
   }
   cout << "  ";
   cout << format("({:.2f}%)", probability*100);
+
+  if (index == 0) {
+     cout << format(" -> Predicted: ({:.2f}%)", pred*100);
+  }
+
   cout << '\n';
   if (folded) cout << "\033[0m";
 }
@@ -90,6 +95,7 @@ void printCards(string info, vector<Card> cards, bool folded, double probability
 void printTable(const string& stage, vector<Hand>& hands){
   clearScreen();
   auto probabilities = monteCarlo(hands, 10000);
+  double predict = monteCarloPartial(hands.size(), hands[0], 10000);
   cout << "\n========== " << stage << " ==========\n";
 
   auto community = hands[0].getCommCards();
@@ -102,7 +108,7 @@ void printTable(const string& stage, vector<Hand>& hands){
 
   for (size_t i = 0; i < hands.size(); i++) {
       string info = format("Player {}:", i + 1);
-      printCards(info, hands[i].getHoleCards(), hands[i].getFolded(), probabilities[i]);
+      printCards(info, hands[i].getHoleCards(), hands[i].getFolded(), probabilities[i], i, predict);
   }
 
   cout << "=============================\n";

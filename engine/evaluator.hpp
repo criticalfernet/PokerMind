@@ -295,13 +295,10 @@ std::pair<HandRank, std::array<Card, 5>> evaluateOmaha(const std::vector<Card>& 
 }
 
 
-std::pair<HandRank, std::array<Card, 5>> evaluateHand(const Hand& hand) {
-  const auto& hole = hand.getHoleCards();
-  const auto& comm = hand.getCommCards();
-
+std::pair<HandRank, std::array<Card, 5>> evaluateHand(const std::vector<Card>& comm,const std::vector<Card>& hole, Variant var) {
   if (comm.size() != 5) throw std::runtime_error("Invalid Community Cards");
 
-  if (hand.getVariant() == Variant::TexasHoldem) {
+  if (var == Variant::TexasHoldem) {
     std::array<Card, 7> available;
     for(int i = 0; i < 2; i++) available[i] = hole[i];
     for(int i = 0; i < 5; i++) available[i+2] = comm[i];
@@ -309,9 +306,17 @@ std::pair<HandRank, std::array<Card, 5>> evaluateHand(const Hand& hand) {
     return evaluateTexas(available);
   }
 
-  else if (hand.getVariant() == Variant::Omaha) {
+  else if (var == Variant::Omaha) {
     return evaluateOmaha(hole, comm);
   }
 
   return {make_rank(HandCategory::None,{0}), std::array<Card, 5>{}};
+}
+
+
+std::pair<HandRank, std::array<Card, 5>> evaluateHand(const Hand& hand) {
+  const auto& hole = hand.getHoleCards();
+  const auto& comm = hand.getCommCards();
+
+  return evaluateHand(comm, hole, hand.getVariant());
 }
