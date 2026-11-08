@@ -97,7 +97,8 @@ public:
     std::cout << "\n";
  
     std::cout << "Money left: " << money << "\n";
-    double predict = monteCarloPartial(players - 1, hand, 1'000'000);
+
+    double predict = monteCarloPartial(players, hand, 1'000'000);
     std:: cout << "Predicted Chances of winning: " << std::format("({:.2f}%)", predict*100) << "\n";
   }
 
@@ -229,7 +230,8 @@ class Simulator {
     std::vector<size_t> winners;
     for (size_t i : eligible) {
       if (winners.empty() || ranks[winners.front()] < ranks[i]) {
-        winners = {i};
+        winners.clear();
+        winners.push_back(i);
       } else if (ranks[i] == ranks[winners.front()]) {
         winners.push_back(i);
       }

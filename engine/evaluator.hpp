@@ -6,7 +6,6 @@
 #include <functional>
 #include <vector>
 #include <utility>
-#include <bit>
 
 #include "card.hpp"
 #include "hand.hpp"
@@ -312,3 +311,4 @@ HandRank evaluateHand(const Hand& hand) {
 
   return evaluateHand(comm, hole, hand.getVariant());
 }
+

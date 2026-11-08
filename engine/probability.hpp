@@ -4,9 +4,25 @@
 #include <future>
 #include <thread>
 #include <algorithm>
+#include <random>
 
 #include "hand.hpp"
 #include "evaluator.hpp"
+#include "bestHands.hpp"
+
+inline std::vector<double> buildHandCdf(size_t n, double weight) {
+  constexpr double BIAS_STRENGTH = 4.0;
+  const double k = (weight - 0.5) * 2.0 * BIAS_STRENGTH;
+
+  std::vector<double> cdf(n);
+  double running = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    const double q = n > 1 ? 1.0 - static_cast<double>(i) / (n - 1) : 1.0;
+    running += std::exp(k * q);
+    cdf[i] = running;
+  }
+  return cdf;
+}
 
 inline std::vector<Card> getKnownCards(const std::vector<Hand>& hands) {
   std::vector<Card> revealed;
@@ -133,29 +149,62 @@ inline std::vector<double> monteCarlo(const std::vector<Hand>& hands, int simula
 }
 
 
-inline std::vector<int> monteCarloPartialStep(Deck& deck, int remainingPlayers, const Hand& hand) {
+inline std::vector<int> monteCarloPartialStep(Deck& deck,const Hand& hand,const std::vector<std::array<Card, 2>>& sortedHands,
+  const std::vector<std::vector<double>>& opponentCdfs,std::mt19937& rng) {
+
   std::vector<Card> communityCards = hand.getCommCards();
   std::vector<std::vector<Card>> holeCards;
   holeCards.push_back(hand.getHoleCards());
 
-  const int cardsPerPlayer = hand.getVariant() == Variant::TexasHoldem ? 2 : 4;
-  for (int i = 0; i < remainingPlayers; i++) {
-    std::vector<Card> holes;
-    holes.reserve(cardsPerPlayer);
-    for (int j = 0; j < cardsPerPlayer; j++) holes.push_back(deck.draw());
-    holeCards.push_back(std::move(holes));
+  bool used[4][15] = {};
+  std::uniform_real_distribution<double> uni(0.0, 1.0);
+
+  for (const auto& cdf : opponentCdfs) {
+    bool assigned = false;
+
+    for (int attempt = 0; attempt < 100 && !assigned; ++attempt) {
+      const double u = uni(rng) * cdf.back();
+      size_t idx = std::lower_bound(cdf.begin(), cdf.end(), u) - cdf.begin();
+      if (idx >= sortedHands.size()) idx = sortedHands.size() - 1;
+
+      const auto& h = sortedHands[idx];
+      const int s0 = static_cast<int>(h[0].suit), s1 = static_cast<int>(h[1].suit);
+      if (used[s0][h[0].rank] || used[s1][h[1].rank]) continue;
+
+      used[s0][h[0].rank] = used[s1][h[1].rank] = true;
+      deck.remove(h[0]);
+      deck.remove(h[1]);
+      holeCards.push_back({h[0], h[1]});
+      assigned = true;
+    }
+
+    if (!assigned) {
+      const int cardsPerPlayer = hand.getVariant() == Variant::TexasHoldem ? 2 : 4;
+      std::vector<Card> holes;
+      for (int j = 0; j < cardsPerPlayer; ++j) holes.push_back(deck.draw());
+      holeCards.push_back(std::move(holes));
+    }
   }
 
   return monteCarloStep(deck, communityCards, holeCards, hand.getVariant());
 }
 
 
-inline double monteCarloPartial(int totalPlayers, const Hand& hand, int simulations) {
+inline double monteCarloPartial(int totalPlayers, const Hand& hand, int simulations, const std::vector<double>& weights = {}) {
   if(simulations <= 0) return 0.0;
 
   std::vector<Card> known = hand.getCommCards();
   known.insert(known.end(), hand.getHoleCards().begin(), hand.getHoleCards().end());
   const Deck baseDeck(known);
+
+  const auto sortedHands = sortPossibleHands(getPossibleHands(hand), hand.getCommCards());
+
+  const int opponents = totalPlayers - 1;
+  std::vector<std::vector<double>> opponentCdfs;
+  for (int i = 0; i < opponents; ++i) {
+    const double w = i < static_cast<int>(weights.size()) ? weights[i] : 0.5;
+    opponentCdfs.push_back(buildHandCdf(sortedHands.size(), w));
+  }
 
   unsigned hw = std::thread::hardware_concurrency();
   const int nThreads = std::max(1u, std::min<unsigned>(hw, simulations));
@@ -163,11 +212,12 @@ inline double monteCarloPartial(int totalPlayers, const Hand& hand, int simulati
   const int extra = simulations % nThreads;
 
   auto worker = [&](int count) -> int {
-    Deck deck = baseDeck;
+    std::mt19937 rng(std::random_device{}());
     int wins = 0;
     for (int i = 0; i < count; i++) {
+      Deck deck = baseDeck;
       deck.shuffle();
-      for (int p : monteCarloPartialStep(deck, totalPlayers - 1, hand))
+      for (int p : monteCarloPartialStep(deck, hand, sortedHands, opponentCdfs, rng))
         if (p == 0) wins++;
     }
     return wins;

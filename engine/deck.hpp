@@ -58,4 +58,14 @@ public:
     std::shuffle(cards.begin(), cards.begin() + size, rng);
     index = 0;
   }
+
+  void remove(const Card& c) {
+    for (size_t i = index; i < size; ++i) {
+      if (cards[i].rank == c.rank && cards[i].suit == c.suit) {
+        cards[i] = cards[size - 1];
+        --size;
+        return;
+      }
+    }
+  }
 };

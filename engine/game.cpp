@@ -1,8 +1,5 @@
 #include <iostream>
-#include <vector>
 #include <string>
-#include <utility>
-#include <format>
 #include <limits>
 
 #include "deck.hpp"
@@ -10,6 +7,8 @@
 #include "evaluator.hpp"
 #include "probability.hpp"
 #include "simulator.hpp"
+#include "bestHands.hpp"
+#include "check.hpp"
 
 using namespace std;
 
@@ -18,21 +17,21 @@ void clearScreen() {
   cout.flush();
 }
 
+void waitForEnter(const string& message) {
+    cout << "\n" << message << " (press Enter)";
+    cin.get();
+}
 
-int main() {
-  clearScreen();
+int playGame() {
   int numPlayers;
   cout << "Enter No. of players: ";
   cin >> numPlayers;
 
-  int var;
-  cout << "Enter Variation (0 for texas and 1 for Omaha): ";
-  cin >> var;
-
-  cin.ignore(numeric_limits<streamsize>::max(), '\n');
+  int var = 0;
+  // cout << "Enter Variation (0 for texas and 1 for Omaha): ";
+  // cin >> var;
 
   Variant variant = (var == 0) ? Variant::TexasHoldem : Variant::Omaha;
-
   Simulator sim(variant);
   for(int i = 0; i < numPlayers; i++) {
     sim.addPlayer(500);
@@ -41,8 +40,19 @@ int main() {
   cout << "\nGame: " << (sim.getVariant() == Variant::TexasHoldem ? "Texas Hold'em" : "Omaha") << '\n';
 
   for(int i = 0; i <5; i++){
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    waitForEnter("Start Hand. ");
+    clearScreen();
     sim.playHand();
   }
 
   return 0;
+}
+
+int main() {
+  clearScreen();
+
+  // return checkForSortedHands(20);
+  // return checkForWeightsMonteCarlo();
+  return playGame();
 }
