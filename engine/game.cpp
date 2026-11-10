@@ -52,7 +52,7 @@ int playGame() {
 int main() {
   clearScreen();
 
-  // return checkForSortedHands(20);
+  // return checkForSortedHands();
   // return checkForWeightsMonteCarlo();
   return playGame();
 }

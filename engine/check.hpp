@@ -69,6 +69,12 @@ int checkForSortedHands(int cap = 25) {
     std::cout << c << " ";
   }
   std::cout << '\n';
+  std::cout << "Hole Cards: ";
+  for(Card c : hand.getHoleCards()) {
+    std::cout << c << " ";
+  }
+  std::cout << '\n';
+  std::cout << '\n';
 
   auto possible = getPossibleHands(hand);
   auto sorted = sortPossibleHands(possible, hand.getCommCards());
