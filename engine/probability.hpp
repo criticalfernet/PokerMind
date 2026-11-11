@@ -211,24 +211,25 @@ inline double monteCarloPartial(int totalPlayers, const Hand& hand, int simulati
   const int chunk = simulations / nThreads;
   const int extra = simulations % nThreads;
 
-  auto worker = [&](int count) -> int {
+  auto worker = [&](int count) -> double {
     std::mt19937 rng(std::random_device{}());
-    int wins = 0;
+    double wins = 0;
     for (int i = 0; i < count; i++) {
       Deck deck = baseDeck;
       deck.shuffle();
-      for (int p : monteCarloPartialStep(deck, hand, sortedHands, opponentCdfs, rng))
-        if (p == 0) wins++;
+      auto winners = monteCarloPartialStep(deck, hand, sortedHands, opponentCdfs, rng);
+      if(std::find(winners.begin(), winners.end(), 0) != winners.end())
+        wins += 1.0/ winners.size();
     }
     return wins;
   };
 
-  std::vector<std::future<int>> futures;
+  std::vector<std::future<double>> futures;
   futures.reserve(nThreads);
   for (int t = 0; t < nThreads; t++)
     futures.push_back(std::async(std::launch::async, worker, chunk + (t < extra ? 1 : 0)));
 
-  int wins = 0;
+  double wins = 0;
   for (auto& f : futures) wins += f.get();
 
   return static_cast<double>(wins) / simulations;

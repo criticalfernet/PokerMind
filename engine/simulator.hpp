@@ -10,6 +10,7 @@
 
 #include "deck.hpp"
 #include "hand.hpp"
+#include "expected.hpp"
 
 enum class Street : std::uint8_t {
   PreFlop, Flop, Turn, River, Showdown
@@ -81,9 +82,9 @@ public:
     lastAction = Action::None;
   }
 
-  void printStats(int toCall, const Hand& hand, size_t idx, size_t players) const{
+  void printStats(int toCall, const Hand& hand, size_t idx, size_t players, int pot) const{
     std::cout << "\n========== Player " << idx << " ==========\n";
-    std::cout << "\nTo call: " << toCall << "\n";
+    std::cout << "\nPot: "<< pot <<"  To call: " << toCall << "\n";
     std::cout << "Community cards:";
     std::vector<Card> communityCards = hand.getCommCards();
     if (communityCards.empty()) std::cout << " (none)";
@@ -98,15 +99,26 @@ public:
  
     std::cout << "Money left: " << money << "\n";
 
-    double predict = monteCarloPartial(players, hand, 1'000'000);
-    std:: cout << "Predicted Chances of winning: " << std::format("({:.2f}%)", predict*100) << "\n";
+
+    const ExpectedReturn r = expectedReturn(players, hand, pot, toCall, totalBet);
+    const std::vector<double> strong(players - 1, 0.9);
+    const double pStrong = monteCarloPartial(players, hand, 200'000, strong);
+
+    const RaiseAdvice adv = bestRaise(r.equity,pStrong,pot,toCall, money, r.value,players-1);
+    std::cout << std::format("Win probability: {:.2f}% \n",r.equity * 100);
+    std::cout << std::format("Expected return: {:+.1f} chips (net this hand: {:+.1f})\n", r.value, r.netValue);
+    if (adv.amount > 0)
+      std::cout << std::format("Suggestion: raise +{} (EV {:+.1f})\n", adv.amount - toCall, adv.value);
+    else
+      std::cout << "Suggestion: don't raise\n";
+
   }
 
-  Action askMove(int currentBet, size_t idx, const Hand& hand, size_t players) const {
+  Action askMove(int currentBet, size_t idx, const Hand& hand, size_t players, int pot) const {
     if (!canAct()) return Action::None;
     const int toCall = currentBet - bet;
 
-    printStats(toCall, hand, idx,players);
+    printStats(toCall, hand, idx, players, pot);
 
     while (true) {
       printOptions();
@@ -373,7 +385,7 @@ public:
       }
 
       const int prevBet = player.bet;
-      Action move = player.askMove(currentBet, next + 1, hands[player.handindex],n);
+      Action move = player.askMove(currentBet, next + 1, hands[player.handindex],n, pot);
       player.play(move, currentBet);
       const int contribution = player.bet - prevBet;
 
