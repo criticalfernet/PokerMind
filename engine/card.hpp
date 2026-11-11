@@ -14,6 +14,10 @@ struct Card {
   Suit suit;
 };
 
+bool operator==(const Card& c1, const Card& c2) {
+  return (c1.rank == c2.rank) && (c1.suit == c2.suit);
+}
+
 std::ostream& operator<<(std::ostream& os, const Card& card) {
   if (card.rank >= 2 && card.rank <= 10) {
     os << static_cast<int>(card.rank);

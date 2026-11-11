@@ -98,3 +98,24 @@ inline std::vector<std::array<Card, 2>> sortPossibleHands(const std::vector<std:
   for (const auto& s : scored) sorted.push_back(s.second);
   return sorted;
 }
+
+inline int findHandRank(const std::array<Card,2>& target, const std::vector<std::array<Card,2>>& hands){
+  for(size_t i = 0; i < hands.size(); i++) {
+    const auto& h = hands[i];
+
+    bool ordered = (h[0] == target[0] && (h[1] == target[1]));
+    bool reversed = (h[0] == target[1] && (h[1] == target[0]));
+
+    if(ordered || reversed) return i;
+  }
+  return -1;
+}
+
+inline double getHandWeight(const std::array<Card,2>& target, const std::vector<std::array<Card,2>>& hands){
+  int rank = findHandRank(target, hands);
+
+  if(rank == -1 || hands.empty()) return -1.0;
+
+  return 1.0 - static_cast<double>(rank) / hands.size();
+}
+
