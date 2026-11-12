@@ -3,224 +3,16 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <memory>
 
 #include "deck.hpp"
 #include "hand.hpp"
 #include "expected.hpp"
-
-enum class Street : std::uint8_t {
-  PreFlop, Flop, Turn, River, Showdown
-};
-
-enum class Action : std::uint8_t {
-  Allin,
-  Raise,
-  Call,
-  Check,
-  Fold,
-  None
-};
-
-inline std::ostream& operator<<(std::ostream& os, Street street) {
-  switch (street) {
-    case Street::PreFlop: return os << "Pre-Flop";
-    case Street::Flop: return os << "Flop";
-    case Street::Turn: return os << "Turn";
-    case Street::River: return os << "River";
-    case Street::Showdown: return os << "Showdown";
-    default: return os << "Unknown";
-  }
-}
-
-inline void printOptions() {
-  std::cout
-    << "\nChoose action:\n"
-    << "0. All-in\n"
-    << "1. Raise\n"
-    << "2. Call\n"
-    << "3. Check\n"
-    << "4. Fold\n"
-    << "> ";
-}
-
-inline int readInt() {
-  int value;
-  while (true) {
-    if (std::cin >> value) return value;
-    if (std::cin.eof()) throw std::runtime_error("Input stream closed");
-    std::cin.clear();
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    std::cout << "Invalid input.\n> ";
-  }
-}
-
-class Player {
-public:
-  int money = 0;
-  int bet = 0;
-  int totalBet = 0;
-
-  size_t handindex = static_cast<size_t>(-1);
-  bool folded = false;
-  bool allIn = false;
-  Action lastAction = Action::None;
-
-  explicit Player(int startingMoney, size_t handindex)
-    : money(startingMoney), handindex(handindex) {}
-
-  bool canAct() const { return !folded && !allIn && money > 0; }
-
-  void resetForHand() {
-    bet = 0;
-    totalBet = 0;
-    folded = (money <= 0);
-    allIn = false;
-    lastAction = Action::None;
-  }
-
-  void printStats(int toCall, const Hand& hand, size_t idx, size_t players, int pot) const{
-    std::cout << "\n========== Player " << idx << " ==========\n";
-    std::cout << "\nPot: "<< pot <<"  To call: " << toCall << "\n";
-    std::cout << "Community cards:";
-    std::vector<Card> communityCards = hand.getCommCards();
-    if (communityCards.empty()) std::cout << " (none)";
-    for (const Card& c : communityCards) std::cout << " " << c;
-    std::cout << "\n";
-
-    std::vector<Card> holeCards = hand.getHoleCards();
- 
-    std::cout << "Hole cards:";
-    for (const Card& c : holeCards) std::cout << " " << c;
-    std::cout << "\n";
- 
-    std::cout << "Money left: " << money << "\n";
-
-
-    const ExpectedReturn r = expectedReturn(players, hand, pot, toCall, totalBet);
-    const std::vector<double> strong(players - 1, 0.9);
-    const double pStrong = monteCarloPartial(players, hand, 200'000, strong);
-
-    const RaiseAdvice adv = bestRaise(r.equity,pStrong,pot,toCall, money, r.value,players-1);
-    std::cout << std::format("Win probability: {:.2f}% \n",r.equity * 100);
-    std::cout << std::format("Expected return: {:+.1f} chips (net this hand: {:+.1f})\n", r.value, r.netValue);
-    if (adv.amount > 0)
-      std::cout << std::format("Suggestion: raise +{} (EV {:+.1f})\n", adv.amount - toCall, adv.value);
-    else
-      std::cout << "Suggestion: don't raise\n";
-
-  }
-
-  Action askMove(int currentBet, size_t idx, const Hand& hand, size_t players, int pot) const {
-    if (!canAct()) return Action::None;
-    const int toCall = currentBet - bet;
-
-    printStats(toCall, hand, idx, players, pot);
-
-    while (true) {
-      printOptions();
-      int choice = readInt();
-
-      switch (choice) {
-        case 0:
-          return Action::Allin;
-        case 1:
-          if (money <= toCall) {
-            std::cout << "Insufficient money to raise.\n";
-            break;
-          }
-          return Action::Raise;
-        case 2:
-          if (toCall <= 0) {
-            std::cout << "Nothing to call. Check instead.\n";
-            break;
-          }
-          if (money < toCall) {
-            std::cout << "Insufficient money to call. Go all-in or fold.\n";
-            break;
-          }
-          return Action::Call;
-        case 3:
-          if (bet != currentBet) {
-            std::cout << "Cannot check. You must call or fold.\n";
-            break;
-          }
-          return Action::Check;
-        case 4:
-          return Action::Fold;
-        default:
-          std::cout << "Invalid Action.\n";
-      }
-    }
-  }
-
-  void play(Action move, int currentBet) {
-    if (!canAct()) {
-      lastAction = Action::None;
-      return;
-    }
-
-    switch (move) {
-      case Action::None: break;
-      case Action::Fold:
-        folded = true;
-        lastAction = Action::Fold;
-        break;
-      case Action::Allin:
-        bet += money;
-        money = 0;
-        allIn = true;
-        lastAction = Action::Allin;
-        break;
-      case Action::Check:
-        lastAction = Action::Check;
-        break;
-      case Action::Call: {
-        int amount = currentBet - bet;
-        money -= amount;
-        bet += amount;
-        if (money == 0) {
-          allIn = true;
-          lastAction = Action::Allin;
-          break;
-        }
-        lastAction = Action::Call;
-        break;
-      }
-      case Action::Raise: {
-        while (true) {
-          std::cout << "Enter amount to put in (must exceed " << (currentBet - bet)
-                    << " to call, max " << money << "): ";
-          int amount = readInt();
-
-          if (amount <= currentBet - bet) {
-            std::cout << "Raise must exceed the call amount.\n";
-            continue;
-          }
-          if (amount > money) {
-            std::cout << "Insufficient money to raise.\n";
-            continue;
-          }
-
-          money -= amount;
-          bet += amount;
-
-          if (money == 0) {
-            allIn = true;
-            lastAction = Action::Allin;
-          } else {
-            lastAction = Action::Raise;
-          }
-          return;
-        }
-      }
-    }
-  }
-};
-
+#include "decision.hpp"
+#include "player.hpp"
 
 class Simulator {
   Variant variant;
@@ -232,6 +24,7 @@ class Simulator {
 
   Deck deck;
   std::vector<Card> communityCards;
+  std::vector<HandAction> actionHistory;
 
   Street street = Street::PreFlop;
 
@@ -267,10 +60,10 @@ class Simulator {
 public:
   explicit Simulator(Variant gameVariant) : variant(gameVariant) {}
 
-  void addPlayer(std::int64_t startingMoney) {
+  void addPlayer(std::int64_t startingMoney, std::unique_ptr<DecisionPolicy> policy = nullptr){
     size_t idx = hands.size();
     hands.emplace_back(variant);
-    players.emplace_back(static_cast<int>(startingMoney), idx);
+    players.emplace_back(static_cast<int>(startingMoney), idx, std::move(policy));
   }
 
   Variant getVariant() const { return variant; }
@@ -288,6 +81,7 @@ public:
     communityCards.clear();
     deck = Deck();
     deck.shuffle();
+    actionHistory = {};
 
     size_t withChips = 0;
     for (Player& p : players) {
@@ -343,7 +137,8 @@ public:
 
   void beginBettingRound() {
     const size_t n = players.size();
-    for (Player& p : players) { p.bet = 0; p.lastAction = Action::None; }
+    for (Player& p : players) 
+      p.bet = 0;
     currentBet = 0;
 
     size_t cursor = (dealerPosition + 1) % n;
@@ -385,8 +180,8 @@ public:
       }
 
       const int prevBet = player.bet;
-      Action move = player.askMove(currentBet, next + 1, hands[player.handindex],n, pot);
-      player.play(move, currentBet);
+      HandAction log = player.play(next+1,pot,currentBet,n,street,hands[player.handindex], actionHistory);
+      actionHistory.push_back(log);
       const int contribution = player.bet - prevBet;
 
       pot += contribution;

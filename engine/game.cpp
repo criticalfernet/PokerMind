@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <limits>
+#include <memory>
 
 #include "deck.hpp"
 #include "hand.hpp"
@@ -9,6 +10,7 @@
 #include "simulator.hpp"
 #include "bestHands.hpp"
 #include "check.hpp"
+#include "humanPolicy.hpp"
 
 using namespace std;
 
@@ -34,7 +36,7 @@ int playGame() {
   Variant variant = (var == 0) ? Variant::TexasHoldem : Variant::Omaha;
   Simulator sim(variant);
   for(int i = 0; i < numPlayers; i++) {
-    sim.addPlayer(500);
+    sim.addPlayer(500, std::make_unique<HumanPolicy>());
   }
 
   cout << "\nGame: " << (sim.getVariant() == Variant::TexasHoldem ? "Texas Hold'em" : "Omaha") << '\n';
