@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <algorithm>
 #include <cstdint>
 
@@ -29,6 +30,12 @@ inline std::ostream& operator<<(std::ostream& os, Street street) {
     default: return os << "Unknown";
   }
 }
+
+
+struct RevealedHand {
+    size_t playerIndex;
+    Hand hand;
+};
 
 
 struct HandAction {
@@ -70,13 +77,22 @@ struct Decision {
 
 class DecisionPolicy {
 public:
-  std::vector<double> weights;
+  std::unordered_map<size_t, double> weightsMap;
   double foldBase = 0.6;
 
   void setFoldBase(double f) {
     foldBase = std::clamp(f, 0.0, 1.0);
   }
 
+  std::vector<double> getWeightVector() {
+    std::vector<double> result;
+    result.reserve(weightsMap.size());
+    for (const auto& [key, value] : weightsMap)
+      result.push_back(value);
+    return result;
+  }
+
   virtual ~DecisionPolicy() = default;
   virtual Decision decide(const DecisionContext& context) = 0;
+  virtual void revealHands(size_t, const std::vector<RevealedHand>&) {}
 };

@@ -80,7 +80,7 @@ Action askMove(const DecisionContext& ctx){
         }
         return Action::Call;
       case 3:
-        if (ctx.totalBet != ctx.currentBet) {
+        if (ctx.toCall != 0) {
           std::cout << "Cannot check. You must call or fold.\n";
           break;
         }

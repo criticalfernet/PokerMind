@@ -48,7 +48,7 @@ public:
     ctx.holeCards = hand.getHoleCards();
     ctx.communityCards = hand.getCommCards();
 
-    ctx.expected = expectedReturn(totalPlayers, hand, pot, ctx.toCall, totalBet, policy->weights);
+    ctx.expected = expectedReturn(totalPlayers, hand, pot, ctx.toCall, totalBet, policy->getWeightVector());
 
     const std::vector<double> strong(totalPlayers - 1, 0.8);
     const double pStrong = monteCarloPartial(totalPlayers, hand, 200'000, strong);

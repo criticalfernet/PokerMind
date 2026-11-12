@@ -11,6 +11,7 @@
 #include "bestHands.hpp"
 #include "check.hpp"
 #include "humanPolicy.hpp"
+#include "aiPolicy.hpp"
 
 using namespace std;
 
@@ -30,13 +31,12 @@ int playGame() {
   cin >> numPlayers;
 
   int var = 0;
-  // cout << "Enter Variation (0 for texas and 1 for Omaha): ";
-  // cin >> var;
-
   Variant variant = (var == 0) ? Variant::TexasHoldem : Variant::Omaha;
+
   Simulator sim(variant);
-  for(int i = 0; i < numPlayers; i++) {
-    sim.addPlayer(500, std::make_unique<HumanPolicy>());
+  for(int i = 0; i < numPlayers-1; i++) {
+    sim.addPlayer(500, std::make_unique<AIPolicy>());
+    // sim.addPlayer(500, std::make_unique<HumanPolicy>());
   }
 
   cout << "\nGame: " << (sim.getVariant() == Variant::TexasHoldem ? "Texas Hold'em" : "Omaha") << '\n';

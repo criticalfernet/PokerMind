@@ -23,7 +23,13 @@ public:
     limit = variant == Variant::TexasHoldem ? 2 : 4;
     holeCards.reserve(limit);
     CommCards.reserve(5);
-  } 
+  }
+
+  Hand(const std::vector<Card>& hole, const std::vector<Card>& comm) : 
+    Hand(Variant::TexasHoldem){
+      holeCards = hole;
+      CommCards = comm;
+    }
 
   Variant getVariant() const{
     return variant;

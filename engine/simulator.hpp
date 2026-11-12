@@ -215,7 +215,26 @@ public:
     return {ranks[best.front()], winners};
   }
 
+  void revealHands() {
+    std::vector<RevealedHand> revealedHands;
+
+    revealedHands.reserve(players.size());
+
+    for (size_t i = 0; i < players.size(); i++) {
+      revealedHands.push_back({
+        i, hands[players[i].handindex]
+      });
+    }
+
+    for (size_t i = 0; i < players.size(); i++) {
+      const Player& player = players[i];
+      if (player.policy)
+        player.policy->revealHands(i,revealedHands);
+    }
+  }
+
   void distributePot() {
+    revealHands();
     const size_t n = players.size();
 
     std::vector<size_t> contenders;
